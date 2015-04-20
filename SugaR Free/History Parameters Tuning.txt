@@ -1,0 +1,29 @@
+Sugar v5.0 32-64 Bit 
+
+
+History parameters tuning UCI options
+
+Mg=MiddleGame
+Eg=EndGame
+
+KingSafetyMaxBonus
+
+Max bonus for king safety. Corresponds to start position with all the pawns
+Decreases according to the position
+
+EnPassantBonus
+
+Tune Bonus for en passant pawns.
+
+
+MidgameLimit
+EndgameLimit
+
+
+Split MiddleGame and endgame scale factor for positive and negative 
+
+
+ClosedCenterWeakFactor
+OpenCenterStormFactor
+Tuning Factor center Open\Closed
+__________________________________
