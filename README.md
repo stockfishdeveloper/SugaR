@@ -1,4 +1,4 @@
-Overview###
+### Overview
 
 SugaR is a free UCI chess engine derived from Stockfish. It is
 not a complete chess program and requires some UCI-compatible GUI
