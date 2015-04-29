@@ -1,18 +1,20 @@
 /*
-# SugaR, a UCI chess playing engine derived from Stockfish
-# Copyright (C) 2008-2015 Marco Costalba, Joona Kiiski, Tord Romstad
-# SugaR is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# SugaR is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+  Stockfish, a UCI chess playing engine derived from Glaurung 2.1
+  Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
+  Copyright (C) 2008-2015 Marco Costalba, Joona Kiiski, Tord Romstad
+
+  Stockfish is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  Stockfish is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #ifndef PSQTAB_H_INCLUDED
@@ -40,14 +42,14 @@ static const Score PSQT[][SQUARE_NB] = {
    S(  0, 0), S(  0, 0), S( 0, 0), S( 0, 0), S( 0, 0), S( 0, 0), S(  0, 0), S(  0, 0)
   },
   { // Knight
-   S(-142,-106), S(-99,-87), S(-79,-58), S(-74, -1), S(-74, -1), S(-79,-58), S(-99,-87), S(-142,-106),
-   S( -81, -73), S(-37,-59), S(-32,-24), S(-10, 27), S(-10, 27), S(-32,-24), S(-37,-59), S( -81, -73),
-   S( -72, -48), S(-16,-46), S( -1,-17), S( 11, 41), S( 11, 41), S( -1, 17), S(-16,-46), S( -72, -48),
-   S( -22, -42), S(  8,-29), S( 39,  7), S( 47, 41), S( 47, 41), S( 39,  7), S(  8,-29), S( -22, -42),
-   S( -39, -39), S( 12,-17), S( 32,  4), S( 50, 29), S( 50, 29), S( 32,  4), S( 12,-17), S( -39, -39),
-   S( - 4, -64), S( 21,-41), S( 54,-13), S( 64, 16), S( 64, 16), S( 54,-13), S( 21,-41), S(  -4, -64),
-   S( -63, -86), S(-23,-42), S( -6,-11), S( 17,  9), S( 17,  9), S( -6,-11), S(-23,-42), S( -63, -86),
-   S(-216, -88), S(-57,-74), S(-30,-53), S(-33,-21), S(-33,-21), S(-30,-53), S(-57,-74), S(-216, -88)
+   S(-144,-98), S(-109,-83), S(-85,-51), S(-73,-16), S(-73,-16), S(-85,-51), S(-109,-83), S(-144,-98),
+   S( -88,-68), S( -43,-53), S(-19,-21), S( -7, 14), S( -7, 14), S(-19,-21), S( -43,-53), S( -88,-68),
+   S( -69,-53), S( -24,-38), S(  0, -6), S( 12, 29), S( 12, 29), S(  0, -6), S( -24,-38), S( -69,-53),
+   S( -28,-42), S(  17,-27), S( 41,  5), S( 53, 40), S( 53, 40), S( 41,  5), S(  17,-27), S( -28,-42),
+   S( -30,-42), S(  15,-27), S( 39,  5), S( 51, 40), S( 51, 40), S( 39,  5), S(  15,-27), S( -30,-42),
+   S( -10,-53), S(  35,-38), S( 59, -6), S( 71, 29), S( 71, 29), S( 59, -6), S(  35,-38), S( -10,-53),
+   S( -64,-68), S( -19,-53), S(  5,-21), S( 17, 14), S( 17, 14), S(  5,-21), S( -19,-53), S( -64,-68),
+   S(-200,-98), S( -65,-83), S(-41,-51), S(-29,-16), S(-29,-16), S(-41,-51), S( -65,-83), S(-200,-98)
   },
   { // Bishop
    S(-54,-65), S(-27,-42), S(-34,-44), S(-43,-26), S(-43,-26), S(-34,-44), S(-27,-42), S(-54,-65),
@@ -60,14 +62,14 @@ static const Score PSQT[][SQUARE_NB] = {
    S(-49,-65), S(-22,-42), S(-29,-44), S(-38,-26), S(-38,-26), S(-29,-44), S(-22,-42), S(-49,-65)
   },
   { // Rook
-   S(-25,-6), S(-17, 0), S(-12, 2), S(-8, 3), S(-8, 3), S(-12, 2), S(-17, 0), S(-25,-6),
-   S(-22,-6), S( -7, 0), S( -2, 2), S( 2, 3), S( 2, 3), S( -2, 2), S( -7, 0), S(-22,-6),
-   S(-15,-1), S(  0, 5), S(  5, 7), S( 9, 8), S( 9, 8), S(  5, 7), S(  0, 5), S(-15,-1),
-   S(-17,-6), S( -5, 0), S(  0, 2), S( 4, 3), S( 4, 3), S(  0, 2), S( -5, 0), S(-17,-6),
-   S(-21,-6), S( -6, 0), S( -1, 2), S( 2, 3), S( 2, 3), S( -1, 2), S( -6, 0), S(-21,-6),
-   S(-20,-6), S( -5, 0), S(  0, 2), S( 4, 3), S( 4, 3), S(  0, 2), S( -5, 0), S(-20,-6),
-   S(-11,-6), S(  4, 0), S(  9, 2), S(13, 3), S(13, 3), S(  9, 2), S(  4, 0), S(-11,-6),
-   S(-22,-6), S(-14, 0), S( -9, 2), S(-5, 3), S(-5, 3), S( -9, 2), S(-14, 0), S(-22,-6)
+   S(-22, 3), S(-17, 3), S(-12, 3), S(-8, 3), S(-8, 3), S(-12, 3), S(-17, 3), S(-22, 3),
+   S(-22, 3), S( -7, 3), S( -2, 3), S( 2, 3), S( 2, 3), S( -2, 3), S( -7, 3), S(-22, 3),
+   S(-22, 3), S( -7, 3), S( -2, 3), S( 2, 3), S( 2, 3), S( -2, 3), S( -7, 3), S(-22, 3),
+   S(-22, 3), S( -7, 3), S( -2, 3), S( 2, 3), S( 2, 3), S( -2, 3), S( -7, 3), S(-22, 3),
+   S(-22, 3), S( -7, 3), S( -2, 3), S( 2, 3), S( 2, 3), S( -2, 3), S( -7, 3), S(-22, 3),
+   S(-22, 3), S( -7, 3), S( -2, 3), S( 2, 3), S( 2, 3), S( -2, 3), S( -7, 3), S(-22, 3),
+   S(-11, 3), S(  4, 3), S(  9, 3), S(13, 3), S(13, 3), S(  9, 3), S(  4, 3), S(-11, 3),
+   S(-22, 3), S(-17, 3), S(-12, 3), S(-8, 3), S(-8, 3), S(-12, 3), S(-17, 3), S(-22, 3)
   },
   { // Queen
    S(-2,-80), S(-2,-54), S(-2,-42), S(-2,-30), S(-2,-30), S(-2,-42), S(-2,-54), S(-2,-80),

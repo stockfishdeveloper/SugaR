@@ -1,18 +1,20 @@
 /*
-# SugaR, a UCI chess playing engine derived from Stockfish
-# Copyright (C) 2008-2015 Marco Costalba, Joona Kiiski, Tord Romstad
-# SugaR is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# SugaR is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+  Stockfish, a UCI chess playing engine derived from Glaurung 2.1
+  Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
+  Copyright (C) 2008-2015 Marco Costalba, Joona Kiiski, Tord Romstad
+
+  Stockfish is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  Stockfish is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include <algorithm>
@@ -64,14 +66,14 @@ namespace {
   enum NodeType { Root, PV, NonPV };
 
   // Razoring and futility margin based on depth
-  inline Value razor_margin(Depth d) { return Value(512 + 32 * d); }
-  inline Value futility_margin(Depth d) { return Value(200 * d); }
+  Value razor_margin(Depth d) { return Value(512 + 32 * d); }
+  Value futility_margin(Depth d) { return Value(200 * d); }
 
   // Futility and reductions lookup tables, initialized at startup
   int FutilityMoveCounts[2][16];  // [improving][depth]
   Depth Reductions[2][2][64][64]; // [pv][improving][depth][moveNumber]
 
-  template <bool PvNode> inline Depth reduction(bool i, Depth d, int mn) {
+  template <bool PvNode> Depth reduction(bool i, Depth d, int mn) {
     return Reductions[PvNode][i][std::min(d, 63 * ONE_PLY)][std::min(mn, 63)];
   }
 
@@ -466,16 +468,12 @@ namespace {
 
                 // Stop the search if only one legal move is available or all
                 // of the available time has been used or we matched an easyMove
-
                 // from the previous search and just did a fast verification.
-
                 if (   RootMoves.size() == 1
                     || Time.elapsed() > Time.available()
                     || (   RootMoves[0].pv[0] == easyMove
                         && BestMoveChanges < 0.03
                         && Time.elapsed() > Time.available() / 10))
-
-
                 {
                     // If we are allowed to ponder do not stop the search now but
                     // keep pondering until the GUI sends "ponderhit" or "stop".
@@ -699,7 +697,7 @@ namespace {
     }
 
     // Step 7. Futility pruning: child node (skipped when in check)
-    if (   !PvNode
+    if (   !RootNode
         &&  depth < 7 * ONE_PLY
         &&  eval - futility_margin(depth) >= beta
         &&  eval < VALUE_KNOWN_WIN  // Do not return unproven wins
@@ -892,7 +890,7 @@ moves_loop: // When in check and at SpNode search starts from here
       newDepth = depth - ONE_PLY + extension;
 
       // Step 13. Pruning at shallow depth
-      if (   !PvNode
+      if (   !RootNode
           && !captureOrPromotion
           && !inCheck
           && !dangerous
@@ -961,7 +959,7 @@ moves_loop: // When in check and at SpNode search starts from here
 
       // Step 15. Reduced depth search (LMR). If the move fails high it will be
       // re-searched at full depth.
-       if (((depth >= 3 * ONE_PLY &&  moveCount > 1) || (depth == 2 * ONE_PLY && moveCount > 2 && CounterMovesHistory[pos.piece_on(prevMoveSq)][prevMoveSq][pos.piece_on(to_sq(move))][to_sq(move)]< VALUE_ZERO))
+      if (    depth >= 3 * ONE_PLY
           &&  moveCount > 1
           && !captureOrPromotion
           &&  move != ss->killers[0]
@@ -970,10 +968,8 @@ moves_loop: // When in check and at SpNode search starts from here
           ss->reduction = reduction<PvNode>(improving, depth, moveCount);
 
           if (   (!PvNode && cutNode)
-
-              || (  History[pos.piece_on(to_sq(move))][to_sq(move)] < VALUE_ZERO
-              &&  CounterMovesHistory[pos.piece_on(prevMoveSq)][prevMoveSq]
-                                       [pos.piece_on(to_sq(move))][to_sq(move)] <= VALUE_ZERO))
+              || (   History[pos.piece_on(to_sq(move))][to_sq(move)] < VALUE_ZERO
+                  && CounterMovesHistory[pos.piece_on(prevMoveSq)][prevMoveSq][pos.piece_on(to_sq(move))][to_sq(move)] <= VALUE_ZERO))
               ss->reduction += ONE_PLY;
 
           if (move == countermove)
@@ -1070,7 +1066,6 @@ moves_loop: // When in check and at SpNode search starts from here
               // the best move changes frequently, we allocate some more time.
               for(int c = moveCount >> 1; c; c >>= 1){BestMoveChanges += bmcIncrement;}
 
-
           }
           else
               // All other moves but the PV are set to the lowest value: this is
@@ -1079,7 +1074,6 @@ moves_loop: // When in check and at SpNode search starts from here
               rm.score = -VALUE_INFINITE;
       }
 
-      bool goodMove = false;
       if (value > bestValue)
       {
           bestValue = SpNode ? splitPoint->bestValue = value : value;
@@ -1092,9 +1086,8 @@ moves_loop: // When in check and at SpNode search starts from here
                   && (move != EasyMove.get(pos.key()) || moveCount > 1))
                   EasyMove.clear();
 
-              goodMove = true;
-
               bestMove = SpNode ? splitPoint->bestMove = move : move;
+
               if (PvNode && !RootNode) // Update pv even in fail-high case
                   update_pv(SpNode ? splitPoint->ss->pv : ss->pv, move, (ss+1)->pv);
 
@@ -1112,7 +1105,7 @@ moves_loop: // When in check and at SpNode search starts from here
           }
       }
 
-      if (!SpNode && !captureOrPromotion && !goodMove && quietCount < 64)
+      if (!SpNode && !captureOrPromotion && move != bestMove && quietCount < 64)
           quietsSearched[quietCount++] = move;
 
       // Step 19. Check for splitting the search
@@ -1158,7 +1151,7 @@ moves_loop: // When in check and at SpNode search starts from here
                    :     inCheck ? mated_in(ss->ply) : DrawValue[pos.side_to_move()];
 
     // Quiet best move: update killers, history and countermoves
-    else if (bestMove != MOVE_NONE && !pos.capture_or_promotion(bestMove))
+    else if (bestMove && !pos.capture_or_promotion(bestMove))
         update_stats(pos, ss, bestMove, depth, quietsSearched, quietCount);
 
     tte->save(posKey, value_to_tt(bestValue, ss->ply),
@@ -1416,9 +1409,12 @@ moves_loop: // When in check and at SpNode search starts from here
     *pv = MOVE_NONE;
   }
 
-  // update_stats() updates killers, history, countermove history and countermoves stats for a quiet best move.
 
-  void update_stats(const Position& pos, Stack* ss, Move move, Depth depth, Move* quiets, int quietsCnt) {
+  // update_stats() updates killers, history, countermove history and
+  // countermoves stats for a quiet best move.
+
+  void update_stats(const Position& pos, Stack* ss, Move move,
+                    Depth depth, Move* quiets, int quietsCnt) {
 
     if (ss->killers[0] != move)
     {
