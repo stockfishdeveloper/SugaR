@@ -129,10 +129,6 @@ namespace {
   size_t PVIdx;
   EasyMoveManager EasyMove;
   double BestMoveChanges;
-  int bmcPars [2] = {100, 50};
-  TUNE(bmcPars);
-  double bmcIncrement = bmcPars[0]/100.0;
-  double bmcDecay     = bmcPars[1]/100.0;
   Value DrawValue[COLOR_NB];
   HistoryStats History;
   CounterMovesHistoryStats CounterMovesHistory;
@@ -336,7 +332,7 @@ namespace {
     std::memset(ss-2, 0, 5 * sizeof(Stack));
 
     depth = DEPTH_ZERO;
-    BestMoveChanges = 0;
+
     bestValue = delta = alpha = -VALUE_INFINITE;
     beta = VALUE_INFINITE;
 
@@ -360,7 +356,7 @@ namespace {
     while (++depth < DEPTH_MAX && !Signals.stop && (!Limits.depth || depth <= Limits.depth))
     {
         // Age out PV variability metric
-        BestMoveChanges *= bmcDecay;
+        BestMoveChanges = (depth <= 3 * ONE_PLY) ? 0 : BestMoveChanges * 0.5;
 
         // Save the last iteration's scores before first PV line is searched and
         // all the move scores except the (new) PV are set to -VALUE_INFINITE.
@@ -467,15 +463,15 @@ namespace {
                 // Stop the search if only one legal move is available or all
                 // of the available time has been used or we matched an easyMove
 
-                // from the previous search and just did a fast verification.
-
+                // from the previous search and just did a fast verification or the
+                // best move is 100% stable and we used over 2/3 of available time.
                 if (   RootMoves.size() == 1
                     || Time.elapsed() > Time.available()
                     || (   RootMoves[0].pv[0] == easyMove
                         && BestMoveChanges < 0.03
-                        && Time.elapsed() > Time.available() / 10))
-
-
+                        && Time.elapsed() > Time.available() / 10)
+                    || (   BestMoveChanges == 0
+                        && Time.elapsed() > 2 * Time.available() / 3))
                 {
                     // If we are allowed to ponder do not stop the search now but
                     // keep pondering until the GUI sends "ponderhit" or "stop".
@@ -495,7 +491,7 @@ namespace {
 
     // Clear any candidate easy move that wasn't stable for the last search
     // iterations; the second condition prevents consecutive fast moves.
-    if (EasyMove.stableCnt < 6 || Time.elapsed() < Time.available())
+    if (EasyMove.stableCnt < 6 || Time.elapsed() < 7 * Time.available() / 10)
         EasyMove.clear();
 
     // If skill level is enabled, swap best PV line with the sub-optimal one
@@ -896,10 +892,6 @@ moves_loop: // When in check and at SpNode search starts from here
           && !captureOrPromotion
           && !inCheck
           && !dangerous
-          && (   !PvNode || bestMove != MOVE_NONE
-              || (   move != countermove
-                  && move != ss->killers[0]
-                  && move != ss->killers[1]))
           &&  bestValue > VALUE_MATED_IN_MAX_PLY)
       {
           // Move count based pruning
@@ -1068,9 +1060,8 @@ moves_loop: // When in check and at SpNode search starts from here
               // We record how often the best move has been changed in each
               // iteration. This information is used for time management: When
               // the best move changes frequently, we allocate some more time.
-              for(int c = moveCount >> 1; c; c >>= 1){BestMoveChanges += bmcIncrement;}
-
-
+              if (moveCount > 1)
+                  ++BestMoveChanges;
           }
           else
               // All other moves but the PV are set to the lowest value: this is
