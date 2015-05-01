@@ -1,4 +1,4 @@
-Sugar v5.2b 32-64 Bit 
+SugaR v5.3 RC1  32-64 Bit 
 
 
 History parameters tuning UCI options
