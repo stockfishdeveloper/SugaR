@@ -1,4 +1,3 @@
-
 /*
 # SugaR, a UCI chess playing engine derived from Stockfish
 # Copyright (C) 2008-2015 Marco Costalba, Joona Kiiski, Tord Romstad
@@ -20,7 +19,6 @@
 #include <cassert>
 #include <ostream>
 
-#include "pawns.h"
 #include "misc.h"
 #include "position.h"
 #include "thread.h"
@@ -28,12 +26,9 @@
 #include "uci.h"
 #include "syzygy/tbprobe.h"
 
-#include "evaluate.h"
 using std::string;
 
 UCI::OptionsMap Options; // Global object
-
-
 
 Value PawnValueMg, PawnValueEg;
 Value KnightValueMg, KnightValueEg;
@@ -43,7 +38,6 @@ Value QueenValueMg, QueenValueEg;
 Value MidgameLimit, EndgameLimit;
 
 namespace UCI {
-
 void on_eval(const Option&) {
   PawnValueMg   = Value(int(Options["PawnValueMg"]));
   PawnValueEg   = Value(int(Options["PawnValueEg"]));
@@ -77,12 +71,9 @@ void on_logger(const Option& o) { start_logger(o); }
 void on_threads(const Option&) { Threads.read_uci_options(); }
 void on_tb_path(const Option& o) { Tablebases::init(o); }
 
-void on_spsa(const Option&) { Pawns::init_spsa(); }
-void on_pawns(const Option&) { Pawns::init(); }
 
 /// Our case insensitive less() function as required by UCI protocol
 bool CaseInsensitiveLess::operator() (const string& s1, const string& s2) const {
-
 
   return std::lexicographical_compare(s1.begin(), s1.end(), s2.begin(), s2.end(),
          [](char c1, char c2) { return tolower(c1) < tolower(c2); });
@@ -109,38 +100,26 @@ void init(OptionsMap& o) {
   o["Slow Mover"]            << Option(80, 10, 1000);
   o["nodestime"]             << Option(0, 0, 10000);
   o["UCI_Chess960"]          << Option(false);
-  o["Use Large Pages"]       << Option(true);  
-  o["KingSafetyMaxBonus"] << Option(257, 0, 600, on_spsa);
-  o["SyzygyPath"]            << Option("../../tb/tbs", on_tb_path);
+  o["SyzygyPath"]            << Option("<empty>", on_tb_path);
   o["SyzygyProbeDepth"]      << Option(1, 1, 100);
   o["Syzygy50MoveRule"]      << Option(true);
   o["SyzygyProbeLimit"]      << Option(6, 0, 6);
-  o["OpenCenterWeakFactor"]                  << Option(128, 0, 256, on_pawns);
-  o["ClosedCenterStormFactor"]                  << Option(128, 0, 256, on_pawns);
-  o["EndgameScale"]          << Option(128, 0, 256, on_eval);
-  o["EnPassantBonusMg"]                  << Option(11, 0, 30, on_pawns);
-  o["EnPassantBonusEg"]                  << Option(6, 0, 30, on_pawns);
   // SPSA
-  o["PawnValueMg"]           << Option(195, 0, 500, on_eval);
-  o["PawnValueEg"]           << Option(260, 0, 500, on_eval);
+  o["PawnValueMg"]           << Option(192, 0, 500, on_eval);
+  o["PawnValueEg"]           << Option(262, 0, 500, on_eval);
   o["KnightValueMg"]         << Option(820, 0, 2000, on_eval);
-  o["KnightValueEg"]         << Option(851, 0, 2000, on_eval);
-  o["BishopValueMg"]         << Option(838, 0, 2000, on_eval);
-  o["BishopValueEg"]         << Option(861, 0, 2000, on_eval);
-  o["RookValueMg"]           << Option(1267, 0, 3000, on_eval);
-  o["RookValueEg"]           << Option(1283, 0, 3000, on_eval);
-  o["QueenValueMg"]          << Option(2519, 0, 5000, on_eval);
-  o["QueenValueEg"]          << Option(2554, 0, 5000, on_eval);
-  o["MidgameLimit"]          << Option(16200, 8000, 25000, on_eval);
-  o["EndgameLimit"]          << Option(3750, 0, 10000, on_eval);
+  o["KnightValueEg"]         << Option(852, 0, 2000, on_eval);
+  o["BishopValueMg"]         << Option(837, 0, 2000, on_eval);
+  o["BishopValueEg"]         << Option(864, 0, 2000, on_eval);
+  o["RookValueMg"]           << Option(1266, 0, 3000, on_eval);
+  o["RookValueEg"]           << Option(1291, 0, 3000, on_eval);
+  o["QueenValueMg"]          << Option(2514, 0, 5000, on_eval);
+  o["QueenValueEg"]          << Option(2547, 0, 5000, on_eval);
+  o["MidgameLimit"]          << Option(15606, 8000, 25000, on_eval);
+  o["EndgameLimit"]          << Option(3991, 0, 10000, on_eval);
 
   on_eval(o["EndgameLimit"]);
 }
-
-
-
-
-
 /// operator<<() is used to print all the options default values in chronological
 /// insertion order (the idx field) and in the format defined by the UCI protocol.
 
@@ -225,3 +204,77 @@ Option& Option::operator=(const string& v) {
 }
 
 } // namespace UCI
+
+
+
+/// Tuning Framework. Fully separated from SF code, appended here to avoid
+/// adding a *.cpp file and to modify Makefile.
+
+#include <iostream>
+#include <sstream>
+
+string Tune::next(string& names, bool pop) {
+
+  string name;
+
+  do {
+      string token = names.substr(0, names.find(','));
+
+      if (pop)
+          names.erase(0, token.size() + 1);
+
+      std::stringstream ws(token);
+      name += (ws >> token, token); // Remove trailing whitespace
+
+  } while (  std::count(name.begin(), name.end(), '(')
+           - std::count(name.begin(), name.end(), ')'));
+
+  return name;
+}
+
+static void on_tune(const UCI::Option&) { Tune::read_options(); }
+
+static void make_option(const string& n, int v, const SetRange& r) {
+
+  // Do not generate option when there is nothing to tune (ie. min = max)
+  if (r(v).first == r(v).second)
+      return;
+
+  Options[n] << UCI::Option(v, r(v).first, r(v).second, on_tune);
+
+  // Print formatted parameters, ready to be copy-pasted in fishtest
+  std::cout << n << ","
+            << v << ","
+            << r(v).first << "," << r(v).second << ","
+            << (r(v).second - r(v).first) / 20.0 << ","
+            << "0.0020"
+            << std::endl;
+}
+
+template<> void Tune::Entry<int>::init_option() { make_option(name, value, range); }
+
+template<> void Tune::Entry<int>::read_option() {
+  if (Options.count(name))
+      value = Options[name];
+}
+
+template<> void Tune::Entry<Value>::init_option() { make_option(name, value, range); }
+
+template<> void Tune::Entry<Value>::read_option() {
+  if (Options.count(name))
+      value = Value(int(Options[name]));
+}
+
+template<> void Tune::Entry<Score>::init_option() {
+  make_option("m" + name, mg_value(value), range);
+  make_option("e" + name, eg_value(value), range);
+}
+
+template<> void Tune::Entry<Score>::read_option() {
+  if (Options.count("m" + name) || Options.count("e" + name))
+      value = make_score(Options["m" + name], Options["e" + name]);
+}
+
+// Instead of a variable here we have a PostUpdate function: just call it
+template<> void Tune::Entry<Tune::PostUpdate>::init_option() {}
+template<> void Tune::Entry<Tune::PostUpdate>::read_option() { value(); }

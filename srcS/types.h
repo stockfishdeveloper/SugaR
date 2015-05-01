@@ -194,14 +194,6 @@ enum Value : int {
 
   VALUE_MATE_IN_MAX_PLY  =  VALUE_MATE - 2 * MAX_PLY,
   VALUE_MATED_IN_MAX_PLY = -VALUE_MATE + 2 * MAX_PLY,
-
-
-
-
-
-
-
-
 };
 
 extern Value PawnValueMg, PawnValueEg;
@@ -445,3 +437,5 @@ inline bool is_ok(Move m) {
 }
 
 #endif // #ifndef TYPES_H_INCLUDED
+
+#include "tune.h" // Global visibility to tuning setup

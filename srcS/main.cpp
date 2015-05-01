@@ -38,6 +38,7 @@ int main(int argc, char* argv[]) {
   #endif
   UCI::init(Options);
   TT.resize(Options["Hash"]);
+  Tune::init();
   Bitboards::init();
   Position::init();
   Bitbases::init();
@@ -46,6 +47,7 @@ int main(int argc, char* argv[]) {
   Pawns::init();
   Threads.init();
   Tablebases::init(Options["SyzygyPath"]);
+
 
 
 

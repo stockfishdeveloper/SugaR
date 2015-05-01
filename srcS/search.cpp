@@ -1,4 +1,3 @@
-
 /*
 # SugaR, a UCI chess playing engine derived from Stockfish
 # Copyright (C) 2008-2015 Marco Costalba, Joona Kiiski, Tord Romstad
@@ -40,7 +39,6 @@ namespace Search {
   LimitsType Limits;
   RootMoveVector RootMoves;
   Position RootPos;
-
   StateStackPtr SetupStates;
 }
 
@@ -66,14 +64,14 @@ namespace {
   enum NodeType { Root, PV, NonPV };
 
   // Razoring and futility margin based on depth
-  inline Value razor_margin(Depth d) { return Value(512 + 32 * d); }
-  inline Value futility_margin(Depth d) { return Value(200 * d); }
+  Value razor_margin(Depth d) { return Value(512 + 32 * d); }
+  Value futility_margin(Depth d) { return Value(200 * d); }
 
   // Futility and reductions lookup tables, initialized at startup
   int FutilityMoveCounts[2][16];  // [improving][depth]
   Depth Reductions[2][2][64][64]; // [pv][improving][depth][moveNumber]
 
-  template <bool PvNode> inline Depth reduction(bool i, Depth d, int mn) {
+  template <bool PvNode> Depth reduction(bool i, Depth d, int mn) {
     return Reductions[PvNode][i][std::min(d, 63 * ONE_PLY)][std::min(mn, 63)];
   }
 
@@ -131,6 +129,10 @@ namespace {
   size_t PVIdx;
   EasyMoveManager EasyMove;
   double BestMoveChanges;
+  int bmcPars [2] = {100, 50};
+  TUNE(bmcPars);
+  double bmcIncrement = bmcPars[0]/100.0;
+  double bmcDecay     = bmcPars[1]/100.0;
   Value DrawValue[COLOR_NB];
   HistoryStats History;
   CounterMovesHistoryStats CounterMovesHistory;
@@ -176,7 +178,7 @@ void Search::init() {
   for (int d = 0; d < 16; ++d)
   {
       FutilityMoveCounts[0][d] = int(2.4 + 0.773 * pow(d + 0.00, 1.8));
-      FutilityMoveCounts[1][d] = int(2.9 + 1.043 * pow(d + 0.48, 1.8));
+      FutilityMoveCounts[1][d] = int(2.9 + 1.045 * pow(d + 0.49, 1.8));
   }
 }
 
@@ -358,7 +360,7 @@ namespace {
     while (++depth < DEPTH_MAX && !Signals.stop && (!Limits.depth || depth <= Limits.depth))
     {
         // Age out PV variability metric
-        BestMoveChanges *= 0.5;
+        BestMoveChanges *= bmcDecay;
 
         // Save the last iteration's scores before first PV line is searched and
         // all the move scores except the (new) PV are set to -VALUE_INFINITE.
@@ -408,7 +410,6 @@ namespace {
                     && (bestValue <= alpha || bestValue >= beta)
                     && Time.elapsed() > 3000)
                     sync_cout << UCI::pv(pos, depth, alpha, beta) << sync_endl;
-
 
                 // In case of failing low/high increase aspiration window and
                 // re-search, otherwise exit the loop.
@@ -468,11 +469,9 @@ namespace {
                 // from the previous search and just did a fast verification.
                 if (   RootMoves.size() == 1
                     || Time.elapsed() > Time.available()
-
                     || (   RootMoves[0].pv[0] == easyMove
                         && BestMoveChanges < 0.03
                         && Time.elapsed() > Time.available() / 10))
-
                 {
                     // If we are allowed to ponder do not stop the search now but
                     // keep pondering until the GUI sends "ponderhit" or "stop".
@@ -492,7 +491,7 @@ namespace {
 
     // Clear any candidate easy move that wasn't stable for the last search
     // iterations; the second condition prevents consecutive fast moves.
-    if (EasyMove.stableCnt < 6 || Time.elapsed() < 7 * Time.available() / 10)
+    if (EasyMove.stableCnt < 6 || Time.elapsed() < Time.available())
         EasyMove.clear();
 
     // If skill level is enabled, swap best PV line with the sub-optimal one
@@ -589,7 +588,6 @@ namespace {
     posKey = excludedMove ? pos.exclusion_key() : pos.key();
     tte = TT.probe(posKey, ttHit);
     ss->ttMove = ttMove = RootNode ? RootMoves[PVIdx].pv[0] : ttHit ? tte->move() : MOVE_NONE;
-
     ttValue = ttHit ? value_from_tt(tte->value(), ss->ply) : VALUE_NONE;
 
     // At non-PV nodes we check for a fail high/low. We don't prune at PV nodes
@@ -664,7 +662,7 @@ namespace {
 
         tte->save(posKey, VALUE_NONE, BOUND_NONE, DEPTH_NONE, MOVE_NONE, ss->staticEval, TT.generation());
     }
- 
+
     if (ss->skipEarlyPruning)
         goto moves_loop;
 
@@ -790,11 +788,8 @@ namespace {
 
 moves_loop: // When in check and at SpNode search starts from here
 
-
     Square prevMoveSq = to_sq((ss-1)->currentMove);
     Move countermove = Countermoves[pos.piece_on(prevMoveSq)][prevMoveSq];
-
-
 
     MovePicker mp(pos, ttMove, depth, History, CounterMovesHistory, countermove, ss);
     CheckInfo ci(pos);
@@ -897,6 +892,10 @@ moves_loop: // When in check and at SpNode search starts from here
           && !captureOrPromotion
           && !inCheck
           && !dangerous
+          && (   !PvNode || bestMove != MOVE_NONE
+              || (   move != countermove
+                  && move != ss->killers[0]
+                  && move != ss->killers[1]))
           &&  bestValue > VALUE_MATED_IN_MAX_PLY)
       {
           // Move count based pruning
@@ -967,11 +966,8 @@ moves_loop: // When in check and at SpNode search starts from here
           ss->reduction = reduction<PvNode>(improving, depth, moveCount);
 
           if (   (!PvNode && cutNode)
-
-              || (  History[pos.piece_on(to_sq(move))][to_sq(move)]
-
-                  + CounterMovesHistory[pos.piece_on(prevMoveSq)][prevMoveSq]
-                                       [pos.piece_on(to_sq(move))][to_sq(move)] < VALUE_ZERO))
+              || (   History[pos.piece_on(to_sq(move))][to_sq(move)] < VALUE_ZERO
+                  && CounterMovesHistory[pos.piece_on(prevMoveSq)][prevMoveSq][pos.piece_on(to_sq(move))][to_sq(move)] <= VALUE_ZERO))
               ss->reduction += ONE_PLY;
 
           if (move == countermove)
@@ -1066,8 +1062,8 @@ moves_loop: // When in check and at SpNode search starts from here
               // We record how often the best move has been changed in each
               // iteration. This information is used for time management: When
               // the best move changes frequently, we allocate some more time.
-              if (moveCount > 1)
-                  ++BestMoveChanges;
+              for(int c = moveCount >> 1; c; c >>= 1){BestMoveChanges += bmcIncrement;}
+
           }
           else
               // All other moves but the PV are set to the lowest value: this is
@@ -1076,11 +1072,10 @@ moves_loop: // When in check and at SpNode search starts from here
               rm.score = -VALUE_INFINITE;
       }
 
-
-      bool goodMove = false;
       if (value > bestValue)
       {
           bestValue = SpNode ? splitPoint->bestValue = value : value;
+
           if (value > alpha)
           {
               // If there is an easy move for this position, clear it if unstable
@@ -1089,7 +1084,6 @@ moves_loop: // When in check and at SpNode search starts from here
                   && (move != EasyMove.get(pos.key()) || moveCount > 1))
                   EasyMove.clear();
 
-              goodMove = true;
               bestMove = SpNode ? splitPoint->bestMove = move : move;
 
               if (PvNode && !RootNode) // Update pv even in fail-high case
@@ -1109,7 +1103,7 @@ moves_loop: // When in check and at SpNode search starts from here
           }
       }
 
-      if (!SpNode && !captureOrPromotion && !goodMove && quietCount < 64)
+      if (!SpNode && !captureOrPromotion && move != bestMove && quietCount < 64)
           quietsSearched[quietCount++] = move;
 
       // Step 19. Check for splitting the search
@@ -1120,9 +1114,7 @@ moves_loop: // When in check and at SpNode search starts from here
                || !thisThread->activeSplitPoint->allSlavesSearching
                || (   Threads.size() > MAX_SLAVES_PER_SPLITPOINT
                    && thisThread->activeSplitPoint->slavesMask.count() == MAX_SLAVES_PER_SPLITPOINT))
-
           &&  thisThread->splitPointsSize < MAX_SPLITPOINTS_PER_THREAD)
-
       {
           assert(bestValue > -VALUE_INFINITE && bestValue < beta);
 
@@ -1157,7 +1149,7 @@ moves_loop: // When in check and at SpNode search starts from here
                    :     inCheck ? mated_in(ss->ply) : DrawValue[pos.side_to_move()];
 
     // Quiet best move: update killers, history and countermoves
-    else if (bestMove != MOVE_NONE && !pos.capture_or_promotion(bestMove))
+    else if (bestMove && !pos.capture_or_promotion(bestMove))
         update_stats(pos, ss, bestMove, depth, quietsSearched, quietCount);
 
     tte->save(posKey, value_to_tt(bestValue, ss->ply),
@@ -1415,10 +1407,12 @@ moves_loop: // When in check and at SpNode search starts from here
     *pv = MOVE_NONE;
   }
 
-  // update_stats() updates killers, history and countermoves stats after a fail-high
-  // of a quiet move.
 
-  void update_stats(const Position& pos, Stack* ss, Move move, Depth depth, Move* quiets, int quietsCnt) {
+  // update_stats() updates killers, history, countermove history and
+  // countermoves stats for a quiet best move.
+
+  void update_stats(const Position& pos, Stack* ss, Move move,
+                    Depth depth, Move* quiets, int quietsCnt) {
 
     if (ss->killers[0] != move)
     {
@@ -1436,7 +1430,7 @@ moves_loop: // When in check and at SpNode search starts from here
     if (is_ok((ss-1)->currentMove))
     {
         Countermoves.update(pos.piece_on(prevSq), prevSq, move);
-        cmh.update(pos.moved_piece(move), to_sq(move), 2*bonus);
+        cmh.update(pos.moved_piece(move), to_sq(move), bonus);
     }
 
     // Decrease all the other played quiet moves
@@ -1445,18 +1439,15 @@ moves_loop: // When in check and at SpNode search starts from here
         History.update(pos.moved_piece(quiets[i]), to_sq(quiets[i]), -bonus);
 
         if (is_ok((ss-1)->currentMove))
-            cmh.update(pos.moved_piece(quiets[i]), to_sq(quiets[i]), -2*bonus);
+            cmh.update(pos.moved_piece(quiets[i]), to_sq(quiets[i]), -bonus);
     }
 
     // Extra penalty for TT move in previous ply when it gets refuted
     if (is_ok((ss-2)->currentMove) && (ss-1)->currentMove == (ss-1)->ttMove)
     {
         Square prevPrevSq = to_sq((ss-2)->currentMove);
-
-
-
         HistoryStats& ttMoveCmh = CounterMovesHistory[pos.piece_on(prevPrevSq)][prevPrevSq];
-        ttMoveCmh.update(pos.piece_on(prevSq), prevSq, 2*(-bonus - 2 * depth / ONE_PLY - 1));
+        ttMoveCmh.update(pos.piece_on(prevSq), prevSq, -bonus - 2 * depth / ONE_PLY - 1);
     }
   }
 
@@ -1746,7 +1737,6 @@ void check_time() {
 
   static TimePoint lastInfoTime = now();
   int elapsed = Time.elapsed();
-
 
   if (now() - lastInfoTime >= 1000)
   {
