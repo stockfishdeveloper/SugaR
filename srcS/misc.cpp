@@ -29,10 +29,11 @@ namespace {
 
 /// Version number. If Version is left empty, then compile date in the format
 /// DD-MM-YY and show in engine_info.
-static const string Version = "SugaR v5.2b";
+static const string Version = "v5.3 RC1";
 
 /// Debug counters
 int64_t hits[2], means[2];
+
 
 /// Our fancy logging facility. The trick here is to replace cin.rdbuf() and
 /// cout.rdbuf() with two Tie objects that tie cin and cout to a file stream. We
@@ -104,7 +105,7 @@ const string engine_info(bool to_uci) {
   string month, day, year;
   stringstream ss, date(__DATE__); // From compiler, format is "Sep 21 2008"
 
-  ss << " " << Version << setfill('0');
+  ss << "SugaR " << Version << setfill('0');
 
   if (Version.empty())
   {
@@ -115,8 +116,8 @@ const string engine_info(bool to_uci) {
   ss << (Is64Bit ? " 64" : "")
      << (HasPext ? " BMI2" : ( UseAVX ? " AVX" : (HasPopCnt ? " POPCNT" : "")))
      << (to_uci  ? "\nid author ": " by ")
-
      << "Marco Zerbinati";
+
   return ss.str();
 }
 
