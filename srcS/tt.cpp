@@ -20,7 +20,6 @@
 
 #include "bitboard.h"
 #include "tt.h"
-#include "uci.h"
 
 TranspositionTable TT; // Our global transposition table
 

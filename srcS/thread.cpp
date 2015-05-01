@@ -36,9 +36,9 @@ namespace {
  // when start_routine (and hence virtual idle_loop) is called and when joining.
 
  template<typename T> T* new_thread() {
-   T* th = new T();
-   th->nativeThread = std::thread(&ThreadBase::idle_loop, th); // Will go to sleep
-   return th;
+   std::thread* th = new T;
+   *th = std::thread(&T::idle_loop, (T*)th); // Will go to sleep
+   return (T*)th;
  }
 
  void delete_thread(ThreadBase* th) {
@@ -48,7 +48,7 @@ namespace {
    th->mutex.unlock();
 
    th->notify_one();
-   th->nativeThread.join(); // Wait for thread termination
+   th->join(); // Wait for thread termination
    delete th;
  }
 
@@ -59,7 +59,7 @@ namespace {
 
 void ThreadBase::notify_one() {
 
-  std::unique_lock<Mutex>(this->mutex);
+  std::unique_lock<Mutex> lk(mutex);
   sleepCondition.notify_one();
 }
 
@@ -297,9 +297,12 @@ void ThreadPool::init() {
 void ThreadPool::exit() {
 
   delete_thread(timer); // As first because check_time() accesses threads data
+  timer = nullptr;
 
   for (Thread* th : *this)
       delete_thread(th);
+
+  clear(); // Get rid of stale pointers
 }
 
 
@@ -315,10 +318,6 @@ void ThreadPool::read_uci_options() {
   size_t requested  = Options["Threads"];
 
   assert(requested > 0);
-
-  // If zero (default) then set best minimum split depth automatically
-  if (!minimumSplitDepth)
-       minimumSplitDepth =  5 * ONE_PLY ;
 
   while (size() < requested)
       push_back(new_thread<Thread>());
@@ -344,24 +343,12 @@ Thread* ThreadPool::available_slave(const SplitPoint* sp) const {
 }
 
 
-
-
-
-
-
-
-
-
-
 // ThreadPool::start_thinking() wakes up the main thread sleeping in
 // MainThread::idle_loop() and starts a new search, then returns immediately.
 
 void ThreadPool::start_thinking(const Position& pos, const LimitsType& limits,
                                 StateStackPtr& states) {
-
   main()->join();
-
-
 
   Signals.stopOnPonderhit = Signals.firstRootMove = false;
   Signals.stop = Signals.failedLowAtRoot = false;

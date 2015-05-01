@@ -25,7 +25,7 @@
 #include "evaluate.h"
 #include "material.h"
 #include "pawns.h"
-#include "uci.h"
+
 namespace {
 
   namespace Tracing {
@@ -91,15 +91,13 @@ namespace {
   enum { Mobility, PawnStructure, PassedPawns, Space, KingSafety };
 
   const struct Weight { int mg, eg; } Weights[] = {
-    {288, 343}, {234, 203}, {223, 275}, {45, 0}, {324, 0}
+    {289, 344}, {233, 201}, {221, 273}, {46, 0}, {322, 0}
   };
 
   Score operator*(Score s, const Weight& w) {
     return make_score(mg_value(s) * w.mg / 256, eg_value(s) * w.eg / 256);
   }
 
-
-  int EndgameScale = 128;
 
   #define V(v) Value(v)
   #define S(mg, eg) make_score(mg, eg)
@@ -158,7 +156,7 @@ namespace {
     S(0, 0), S(0, 0), S(107, 138), S(84, 122), S(114, 203), S(121, 217)
   };
 
-  const Score ThreatenedByHangingPawn = S(39, 57);
+  const Score ThreatenedByHangingPawn = S(40, 60);
 
   // Assorted bonuses and penalties used by evaluation
   const Score KingOnOne          = S( 2, 58);
@@ -168,11 +166,11 @@ namespace {
   const Score RookOnSemiOpenFile = S(19, 10);
   const Score BishopPawns        = S( 8, 12);
   const Score MinorBehindPawn    = S(16,  0);
-  const Score TrappedRook        = S(93,  0);
+  const Score TrappedRook        = S(92,  0);
   const Score Unstoppable        = S( 0, 20);
-  const Score Hanging            = S(30, 26);
-  const Score PawnAttackThreat   = S(21, 21);
-  const Score PawnSafePush       = S( 6,  6);
+  const Score Hanging            = S(31, 26);
+  const Score PawnAttackThreat   = S(20, 20);
+  const Score PawnSafePush       = S( 5,  5);
 
   // Penalty for a bishop on a1/h1 (a8/h8 for black) which is trapped by
   // a friendly pawn on b2/g2 (b7/g7 for black). This can obviously only
@@ -201,12 +199,12 @@ namespace {
   const int KingAttackWeights[PIECE_TYPE_NB] = { 0, 0, 7, 5, 4, 1 };
 
   // Penalties for enemy's safe checks
-  const int QueenContactCheck = 91;
+  const int QueenContactCheck = 89;
   const int RookContactCheck  = 71;
   const int QueenCheck        = 50;
   const int RookCheck         = 37;
   const int BishopCheck       = 6;
-  const int KnightCheck       = 15;
+  const int KnightCheck       = 14;
 
 
   // init_eval_info() initializes king bitboards for given color adding
@@ -306,11 +304,6 @@ namespace {
         int mob = popcount<Pt == QUEEN ? Full : Max15>(b & mobilityArea[Us]);
 
         mobility[Us] += MobilityBonus[Pt][mob];
-
-
-
-
-
 
         if (Pt == BISHOP || Pt == KNIGHT)
         {
@@ -443,7 +436,7 @@ namespace {
         {
             // ...and then remove squares not supported by another enemy piece
             b &= (  ei.attackedBy[Them][PAWN]   | ei.attackedBy[Them][KNIGHT]
-                  | ei.attackedBy[Them][BISHOP] | ei.attackedBy[Them][QUEEN]);
+                  | ei.attackedBy[Them][BISHOP]);
 
             if (b)
                 attackUnits += RookContactCheck * popcount<Max15>(b);
@@ -503,24 +496,24 @@ namespace {
     enum { Defended, Weak };
     enum { Minor, Major };
 
-    Bitboard b, weak, defended, safe_pawns, safe_pawn_threats, unsafe_pawn_threats;
+    Bitboard b, weak, defended, safeThreats;
     Score score = SCORE_ZERO;
 
-    // Pawn Threats
-    b = ei.attackedBy[Us][PAWN] & (pos.pieces(Them) ^ pos.pieces(Them, PAWN));
-    if(b)
+    // Non-pawn enemies attacked by a pawn
+    weak = (pos.pieces(Them) ^ pos.pieces(Them, PAWN)) & ei.attackedBy[Us][PAWN];
+
+    if (weak)
     {
-        safe_pawns = pos.pieces(Us, PAWN) & (~ei.attackedBy[Them][ALL_PIECES] | ei.attackedBy[Us][ALL_PIECES]);
-        safe_pawn_threats = (shift_bb<Right>(safe_pawns) | shift_bb<Left>(safe_pawns)) & (pos.pieces(Them) ^ pos.pieces(Them, PAWN));
-        unsafe_pawn_threats = b ^ safe_pawn_threats;
-	// Unsafe pawn threats
-        if(unsafe_pawn_threats)
-	  score += ThreatenedByHangingPawn;
+        b = pos.pieces(Us, PAWN) & ( ~ei.attackedBy[Them][ALL_PIECES]
+                                    | ei.attackedBy[Us][ALL_PIECES]);
 
-	// Evaluate safe pawn threats
-        while(safe_pawn_threats)
-	  score += ThreatenedByPawn[type_of(pos.piece_on(pop_lsb(&safe_pawn_threats)))];
+        safeThreats = (shift_bb<Right>(b) | shift_bb<Left>(b)) & weak;
 
+        if (weak ^ safeThreats)
+            score += ThreatenedByHangingPawn;
+
+        while (safeThreats)
+            score += ThreatenedByPawn[type_of(pos.piece_on(pop_lsb(&safeThreats)))];
     }
 
     // Non-pawn enemies defended by a pawn
@@ -810,8 +803,6 @@ namespace {
                  sf = ei.pi->pawn_span(strongSide) ? ScaleFactor(56) : ScaleFactor(38);
     }
 
-    sf = ScaleFactor(sf * EndgameScale / 128);
-	
     // Interpolate between a middlegame and a (scaled by 'sf') endgame score
     Value v =  mg_value(score) * int(ei.mi->game_phase())
              + eg_value(score) * int(PHASE_MIDGAME - ei.mi->game_phase()) * sf / SCALE_FACTOR_NORMAL;
@@ -929,8 +920,6 @@ namespace Eval {
         t = std::min(Peak, std::min(i * i * 27, t + MaxSlope));
         KingDanger[i] = make_score(t / 1000, 0) * Weights[KingSafety];
     }
-	
-    EndgameScale = int(Options["EndgameScale"]);
   }
 
 } // namespace Eval

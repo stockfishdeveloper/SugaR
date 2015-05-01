@@ -65,19 +65,15 @@ struct Entry {
   Bitboard pawnAttacks[COLOR_NB];
   Square kingSquares[COLOR_NB];
   Score kingSafety[COLOR_NB];
-  int minKingPawnDistance[COLOR_NB];
   int castlingRights[COLOR_NB];
   int semiopenFiles[COLOR_NB];
   int pawnSpan[COLOR_NB];
   int pawnsOnSquares[COLOR_NB][COLOR_NB]; // [color][light/dark squares]
-  bool pawnsBlockingCenter[COLOR_NB];
-  bool pawnsInCenter[COLOR_NB];
 };
 
 typedef HashTable<Entry, 16384> Table;
 
 void init();
-void init_spsa();
 Entry* probe(const Position& pos);
 
 } // namespace Pawns

@@ -70,6 +70,7 @@ private:
 /// to guarantee always aligned accesses.
 
 
+
 extern int large_use;
 void FREE_MEM (void *);
 
@@ -102,6 +103,7 @@ public:
 private:
   size_t clusterCount;
   Cluster* table;
+
 
 
   uint8_t generation8; // Size must be not bigger than TTEntry::genBound8

@@ -1,4 +1,3 @@
-
 /*
 # SugaR, a UCI chess playing engine derived from Stockfish
 # Copyright (C) 2008-2015 Marco Costalba, Joona Kiiski, Tord Romstad
@@ -24,19 +23,14 @@
 #include "pawns.h"
 #include "position.h"
 #include "thread.h"
-#include "uci.h"
+
 namespace {
 
   #define V Value
   #define S(mg, eg) make_score(mg, eg)
 
   // Doubled pawn penalty by file
-
   const Score Doubled[FILE_NB] = {
-
-
-
-
     S(13, 43), S(20, 48), S(23, 48), S(23, 48),
     S(23, 48), S(23, 48), S(20, 48), S(13, 43) };
 
@@ -57,39 +51,21 @@ namespace {
   // Connected pawn bonus by opposed, phalanx, twice supported and rank
   Score Connected[2][2][2][RANK_NB];
 
-  // Levers bonus by unsupported flag and rank
-  const Score Lever[2][RANK_NB] = {
-  { S( 0, 0), S( 0, 0), S(0, 0), S(10,10),
-    S(37,37), S(78,78), S(0, 0), S( 0, 0) },
-  { S( 0, 0), S( 0, 0), S(0, 0), S( 6, 6),
-    S(27,27), S(50,50), S(0, 0), S( 0, 0) } };
+  // Levers bonus by rank
+  const Score Lever[RANK_NB] = {
+    S( 0, 0), S( 0, 0), S(0, 0), S(0, 0),
+    S(20,20), S(40,40), S(0, 0), S(0, 0) };
 
   // Unsupported pawn penalty
   const Score UnsupportedPawnPenalty = S(20, 10);
 
-  // En Passant bonus
-  Score EnPassantBonus = S(11, 6);
-   
-
-
-   // Center bind bonus: Two pawns controlling the same central square
+  // Center bind bonus: Two pawns controlling the same central square
   const Bitboard CenterBindMask[COLOR_NB] = {
     (FileDBB | FileEBB) & (Rank5BB | Rank6BB | Rank7BB),
     (FileDBB | FileEBB) & (Rank4BB | Rank3BB | Rank2BB)
   };
 
   const Score CenterBind = S(16, 0);
-
-  // Extended center for detecting 'board divided'
-  const Bitboard CenterColumnMask[COLOR_NB] = {
-    (FileDBB | FileEBB) & (Rank5BB | Rank4BB | Rank3BB),
-    (FileDBB | FileEBB) & (Rank4BB | Rank5BB | Rank6BB)
-  };
-
-  int closedCenterStormFactor = 128;
-  int openCenterWeakFactor    = 128;
-
-
 
   // Weakness of our pawn shelter in front of the king by [distance from edge][rank]
   const Value ShelterWeakness[][RANK_NB] = {
@@ -119,7 +95,7 @@ namespace {
 
   // Max bonus for king safety. Corresponds to start position with all the pawns
   // in front of the king and no enemy pawn on the horizon.
-  Value MaxSafetyBonus = V(257);
+  const Value MaxSafetyBonus = V(258);
 
   #undef S
   #undef V
@@ -129,13 +105,12 @@ namespace {
 
     const Color  Them  = (Us == WHITE ? BLACK    : WHITE);
     const Square Up    = (Us == WHITE ? DELTA_N  : DELTA_S);
-    const Square Down  = (Us == WHITE ? DELTA_S  : DELTA_N);
     const Square Right = (Us == WHITE ? DELTA_NE : DELTA_SW);
     const Square Left  = (Us == WHITE ? DELTA_NW : DELTA_SE);
 
-    Bitboard b, neighbours, doubled, connected, supported, phalanx;
+    Bitboard b, neighbours, doubled, supported, phalanx;
     Square s;
-    bool passed, isolated, opposed, shielded, backward, lever;
+    bool passed, isolated, opposed, backward, lever, connected;
     Score score = SCORE_ZERO;
     const Square* pl = pos.list<PAWN>(Us);
     const Bitboard* pawnAttacksBB = StepAttacksBB[make_piece(Us, PAWN)];
@@ -149,9 +124,6 @@ namespace {
     e->pawnAttacks[Us] = shift_bb<Right>(ourPawns) | shift_bb<Left>(ourPawns);
     e->pawnsOnSquares[Us][BLACK] = popcount<Max15>(ourPawns & DarkSquares);
     e->pawnsOnSquares[Us][WHITE] = pos.count<PAWN>(Us) - e->pawnsOnSquares[Us][BLACK];
-    e->pawnsInCenter[Us] = ourPawns & CenterColumnMask[Us];
-    e->pawnsBlockingCenter[Us] = more_than_one(ourPawns & shift_bb<Down>(theirPawns) & CenterColumnMask[Us]);
-
 
     // Loop through all pawns of the current color and score each pawn
     while ((s = *pl++) != SQ_NONE)
@@ -167,7 +139,6 @@ namespace {
         neighbours  =   ourPawns   & adjacent_files_bb(f);
         doubled     =   ourPawns   & forward_bb(Us, s);
         opposed     =   theirPawns & forward_bb(Us, s);
-        shielded    =   (theirPawns | ourPawns) & forward_bb(Us, s);
         passed      = !(theirPawns & passed_pawn_mask(Us, s));
         lever       =   theirPawns & pawnAttacksBB[s];
         phalanx     =   neighbours & rank_bb(s);
@@ -196,15 +167,8 @@ namespace {
             backward = (b | shift_bb<Up>(b)) & theirPawns;
         }
 
-
-        if (!backward && relative_rank(Us, s) == 4)
-        {
-            if (pawn_attack_span(Us, s + pawn_push(Us)) & theirPawns)
-                score += EnPassantBonus;
-
-        }
-
         assert(opposed | passed | (pawn_attack_span(Us, s) & theirPawns));
+
         // Passed pawns will be properly scored in evaluation because we need
         // full attack info to evaluate passed pawns. Only the frontmost passed
         // pawn on each file is considered a true passed pawn.
@@ -215,28 +179,20 @@ namespace {
         if (isolated)
             score -= Isolated[opposed][f];
 
-        if (!supported && !isolated)
+        else if (backward)
+            score -= Backward[opposed][f];
+
+        else if (!supported)
             score -= UnsupportedPawnPenalty;
+
+        if (connected)
+            score += Connected[opposed][!!phalanx][more_than_one(supported)][relative_rank(Us, s)];
 
         if (doubled)
             score -= Doubled[f] / distance<Rank>(s, frontmost_sq(Us, doubled));
 
-        if (backward)
-            score -= Backward[opposed][f];
-
-        if (connected)
-            score += Connected[shielded][!!phalanx][more_than_one(supported)][relative_rank(Us, s)];
-
-
-
-
-
-
-
-
-
         if (lever)
-            score += Lever[!supported][relative_rank(Us, s)];
+            score += Lever[relative_rank(Us, s)];
     }
 
     b = e->semiopenFiles[Us] ^ 0xFF;
@@ -269,21 +225,9 @@ void init()
       int v = (Seed[r] + (phalanx ? (Seed[r + 1] - Seed[r]) / 2 : 0)) >> opposed;
       v += (apex ? v / 2 : 0);
       Connected[opposed][phalanx][apex][r] = make_score(3 * v / 2, v);
-
-          }
-  openCenterWeakFactor = int(Options["OpenCenterWeakFactor"]);
-  closedCenterStormFactor = int(Options["ClosedCenterStormFactor"]);
-		  
-  int mgep = int(Options["EnPassantBonusMg"]);
-  int egep = int(Options["EnPassantBonusEg"]);
-  EnPassantBonus = make_score(mgep, egep);
-
+  }
 }
 
-void init_spsa()
-{
-MaxSafetyBonus = Value(int(Options["KingSafetyMaxBonus"]));
-}
 
 /// Pawns::probe() looks up the current position's pawns configuration in
 /// the pawns hash table. It returns a pointer to the Entry if the position
@@ -319,11 +263,6 @@ Value Entry::shelter_storm(const Position& pos, Square ksq) {
   Bitboard theirPawns = b & pos.pieces(Them);
   Value safety = MaxSafetyBonus;
   File center = std::max(FILE_B, std::min(FILE_G, file_of(ksq)));
-  int stormFactor = 128, weakFactor = 128;
-  if (pawnsBlockingCenter[Us] && center != FILE_D && center != FILE_E)
-      stormFactor = closedCenterStormFactor;
-  if (!pawnsInCenter[Us])
-      weakFactor = openCenterWeakFactor; 
 
   for (File f = center - File(1); f <= center + File(1); ++f)
   {
@@ -333,12 +272,12 @@ Value Entry::shelter_storm(const Position& pos, Square ksq) {
       b  = theirPawns & file_bb(f);
       Rank rkThem = b ? relative_rank(Us, frontmost_sq(Them, b)) : RANK_1;
 
-      safety -=  (ShelterWeakness[std::min(f, FILE_H - f)][rkUs] * weakFactor / 128)
-               + (StormDanger
+      safety -=  ShelterWeakness[std::min(f, FILE_H - f)][rkUs]
+               + StormDanger
                  [f == file_of(ksq) && rkThem == relative_rank(Us, ksq) + 1 ? BlockedByKing  :
                   rkUs   == RANK_1                                          ? NoFriendlyPawn :
                   rkThem == rkUs + 1                                        ? BlockedByPawn  : Unblocked]
-                 [std::min(f, FILE_H - f)][rkThem] * stormFactor / 128);
+                 [std::min(f, FILE_H - f)][rkThem];
   }
 
   return safety;
@@ -353,14 +292,14 @@ Score Entry::do_king_safety(const Position& pos, Square ksq) {
 
   kingSquares[Us] = ksq;
   castlingRights[Us] = pos.can_castle(Us);
-  minKingPawnDistance[Us] = 0;
+  int minKingPawnDistance = 0;
 
   Bitboard pawns = pos.pieces(Us, PAWN);
   if (pawns)
-      while (!(DistanceRingBB[ksq][minKingPawnDistance[Us]++] & pawns)) {}
+      while (!(DistanceRingBB[ksq][minKingPawnDistance++] & pawns)) {}
 
   if (relative_rank(Us, ksq) > RANK_4)
-      return make_score(0, -16 * minKingPawnDistance[Us]);
+      return make_score(0, -16 * minKingPawnDistance);
 
   Value bonus = shelter_storm<Us>(pos, ksq);
 
@@ -371,7 +310,7 @@ Score Entry::do_king_safety(const Position& pos, Square ksq) {
   if (pos.can_castle(MakeCastling<Us, QUEEN_SIDE>::right))
       bonus = std::max(bonus, shelter_storm<Us>(pos, relative_square(Us, SQ_C1)));
 
-  return make_score(bonus, -16 * minKingPawnDistance[Us]);
+  return make_score(bonus, -16 * minKingPawnDistance);
 }
 
 // Explicit template instantiation

@@ -51,7 +51,7 @@ namespace {
     WIN     = 4
   };
 
-  inline Result& operator|=(Result& r, Result v) { return r = Result(r | v); }
+  Result& operator|=(Result& r, Result v) { return r = Result(r | v); }
 
   struct KPKPosition {
     KPKPosition() = default;
@@ -61,7 +61,6 @@ namespace {
     { return us == WHITE ? classify<WHITE>(db) : classify<BLACK>(db); }
 
     template<Color Us> Result classify(const std::vector<KPKPosition>& db);
-
 
     Color us;
     Square ksq[COLOR_NB], psq;
@@ -86,19 +85,16 @@ void Bitbases::init() {
   unsigned idx, repeat = 1;
 
   // Initialize db with known win / draw positions
-
   for (idx = 0; idx < MAX_INDEX; ++idx)
       db[idx] = KPKPosition(idx);
 
   // Iterate through the positions until none of the unknown positions can be
   // changed to either wins or draws (15 cycles needed).
-
   while (repeat)
       for (repeat = idx = 0; idx < MAX_INDEX; ++idx)
           repeat |= (db[idx] == UNKNOWN && db[idx].classify(db) != UNKNOWN);
 
   // Map 32 results into one KPKBitbase[] entry
-
   for (idx = 0; idx < MAX_INDEX; ++idx)
       if (db[idx] == WIN)
           KPKBitbase[idx / 32] |= 1 << (idx & 0x1F);
@@ -108,7 +104,6 @@ void Bitbases::init() {
 namespace {
 
   KPKPosition::KPKPosition(unsigned idx) {
-
 
     ksq[WHITE] = Square((idx >>  0) & 0x3F);
     ksq[BLACK] = Square((idx >>  6) & 0x3F);

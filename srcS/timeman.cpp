@@ -26,6 +26,7 @@
 TimeManagement Time; // Our global time management object
 
 namespace {
+
   enum TimeType { OptimumTime, MaxTime };
 
   const int MoveHorizon   = 50;   // Plan time management at most this many moves ahead
@@ -100,7 +101,6 @@ void TimeManagement::init(Search::LimitsType& limits, Color us, int ply, TimePoi
   }
 
   start = now;
-
   unstablePvFactor = 1;
   optimumTime = maximumTime = std::max(limits.time[us], minThinkingTime);
 
@@ -123,14 +123,10 @@ void TimeManagement::init(Search::LimitsType& limits, Color us, int ply, TimePoi
 
       optimumTime = std::min(t1, optimumTime);
       maximumTime = std::min(t2, maximumTime);
-
-
   }
 
   if (Options["Ponder"])
       optimumTime += optimumTime / 4;
 
-
   optimumTime = std::min(optimumTime, maximumTime);
-
 }

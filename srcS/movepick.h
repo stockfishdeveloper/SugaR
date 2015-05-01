@@ -46,10 +46,6 @@ struct Stats {
 
   void update(Piece pc, Square to, Move m) {
 
-
-
-
-
     if (m != table[pc][to])
         table[pc][to] = m;
   }
@@ -101,8 +97,6 @@ private:
   const HistoryStats& history;
   const CounterMovesHistoryStats& counterMovesHistory;
   Search::Stack* ss;
-
-
   Move countermove;
   Depth depth;
   Move ttMove;
