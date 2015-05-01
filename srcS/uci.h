@@ -15,8 +15,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef UCIOPTION_H_INCLUDED
-#define UCIOPTION_H_INCLUDED
+#ifndef UCI_H_INCLUDED
+#define UCI_H_INCLUDED
 
 #include <map>
 #include <string>
@@ -74,4 +74,4 @@ Move to_move(const Position& pos, std::string& str);
 
 extern UCI::OptionsMap Options;
 
-#endif // #ifndef UCIOPTION_H_INCLUDED
+#endif // #ifndef UCI_H_INCLUDED

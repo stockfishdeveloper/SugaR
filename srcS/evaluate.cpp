@@ -1,4 +1,3 @@
-
 /*
 # SugaR, a UCI chess playing engine derived from Stockfish
 # Copyright (C) 2008-2015 Marco Costalba, Joona Kiiski, Tord Romstad
@@ -145,32 +144,32 @@ namespace {
   // Threat[defended/weak][minor/major attacking][attacked PieceType] contains
   // bonuses according to which piece type attacks which one.
   const Score Threat[][2][PIECE_TYPE_NB] = {
-  { { S(0, 0), S( 0, 0), S(27, 27), S(25, 38), S(58, 99), S(29,110) },   // Defended Minor
-    { S(0, 0), S( 0, 0), S(15, 12), S( 9, 10), S( 7,  7), S(19, 54) } }, // Defended Major
-  { { S(0, 0), S( 0,22), S(37, 37), S(37, 53), S(32,108), S(42,108) },   // Weak Minor
-    { S(0, 0), S( 0,23), S(26, 74), S(26, 56), S(0 , 42), S(11, 56) } }  // Weak Major
+  { { S(0, 0), S( 0, 0), S(19, 37), S(24, 37), S(44, 97), S(35,106) },   // Defended Minor
+    { S(0, 0), S( 0, 0), S( 9, 14), S( 9, 14), S( 7, 14), S(24, 48) } }, // Defended Major
+  { { S(0, 0), S( 0,32), S(33, 41), S(31, 50), S(41,100), S(35,104) },   // Weak Minor
+    { S(0, 0), S( 0,27), S(26, 57), S(26, 57), S(0 , 43), S(23, 51) } }  // Weak Major
   };
 
   // ThreatenedByPawn[PieceType] contains a penalty according to which piece
   // type is attacked by an enemy pawn.
   const Score ThreatenedByPawn[PIECE_TYPE_NB] = {
-    S(0, 0), S(0, 0), S(123, 134), S(92,119), S(117,204), S(125, 197)
+    S(0, 0), S(0, 0), S(107, 138), S(84, 122), S(114, 203), S(121, 217)
   };
 
-  const Score ThreatenedByHangingPawn = S(47, 56);
+  const Score ThreatenedByHangingPawn = S(40, 60);
 
   // Assorted bonuses and penalties used by evaluation
-  const Score KingOnOne          = S( 2, 53);
-  const Score KingOnMany         = S( 7,105);
-  const Score RookOnPawn         = S( 7, 23);
-  const Score RookOnOpenFile     = S(42, 23);
+  const Score KingOnOne          = S( 2, 58);
+  const Score KingOnMany         = S( 6,125);
+  const Score RookOnPawn         = S( 7, 27);
+  const Score RookOnOpenFile     = S(43, 21);
   const Score RookOnSemiOpenFile = S(19, 10);
-  const Score BishopPawns        = S( 8, 14);
-  const Score MinorBehindPawn    = S(17,  0);
-  const Score TrappedRook        = S(83,  0);
-  const Score Unstoppable        = S( 0, 23);
-  const Score Hanging            = S(35, 26);
-  const Score PawnAttackThreat   = S(19, 19);
+  const Score BishopPawns        = S( 8, 12);
+  const Score MinorBehindPawn    = S(16,  0);
+  const Score TrappedRook        = S(92,  0);
+  const Score Unstoppable        = S( 0, 20);
+  const Score Hanging            = S(31, 26);
+  const Score PawnAttackThreat   = S(20, 20);
   const Score PawnSafePush       = S( 5,  5);
 
   // Penalty for a bishop on a1/h1 (a8/h8 for black) which is trapped by
@@ -197,7 +196,7 @@ namespace {
   Score KingDanger[512];
 
   // KingAttackWeights[PieceType] contains king attack weights by piece type
-  const int KingAttackWeights[PIECE_TYPE_NB] = { 0, 1, 7, 5, 4, 1 };
+  const int KingAttackWeights[PIECE_TYPE_NB] = { 0, 0, 7, 5, 4, 1 };
 
   // Penalties for enemy's safe checks
   const int QueenContactCheck = 89;
@@ -214,10 +213,8 @@ namespace {
   template<Color Us>
   void init_eval_info(const Position& pos, EvalInfo& ei) {
 
-    const Color  Them      = (Us == WHITE ? BLACK    : WHITE);
-    const Square Down      = (Us == WHITE ? DELTA_S  : DELTA_N);
-    const Square DownRight = (Us == WHITE ? DELTA_SW : DELTA_NE);
-    const Square DownLeft  = (Us == WHITE ? DELTA_SE : DELTA_NW);
+    const Color  Them = (Us == WHITE ? BLACK   : WHITE);
+    const Square Down = (Us == WHITE ? DELTA_S : DELTA_N);
 
     ei.pinnedPieces[Us] = pos.pinned_pieces(Us);
     ei.attackedBy[Us][ALL_PIECES] = ei.attackedBy[Us][PAWN] = ei.pi->pawn_attacks(Us);
@@ -226,17 +223,16 @@ namespace {
     // Init king safety tables only if we are going to use them
     if (pos.non_pawn_material(Us) >= QueenValueMg)
     {
-        ei.kingRing[Them] = b |= shift_bb<Down>(b);
-
-        b = (shift_bb<DownRight>(b) | shift_bb<DownLeft>(b)) & pos.pieces(Us, PAWN);
+        ei.kingRing[Them] = b | shift_bb<Down>(b);
+        b &= ei.attackedBy[Us][PAWN];
         ei.kingAttackersCount[Us] = b ? popcount<Max15>(b) : 0;
-
-        ei.kingAttackersWeight[Us] = ei.kingAttackersCount[Us] * KingAttackWeights[PAWN];
-        ei.kingAdjacentZoneAttacksCount[Us] = 0;
+        ei.kingAdjacentZoneAttacksCount[Us] = ei.kingAttackersWeight[Us] = 0;
     }
     else
         ei.kingRing[Them] = ei.kingAttackersCount[Us] = 0;
   }
+
+
   // evaluate_outpost() evaluates bishop and knight outpost squares
 
   template<PieceType Pt, Color Us>
@@ -429,7 +425,6 @@ namespace {
                 attackUnits += QueenContactCheck * popcount<Max15>(b);
         }
 
-//if (false) {
         // Analyse the enemy's safe rook contact checks. Firstly, find the
         // undefended squares around the king reachable by the enemy rooks...
         b = undefended & ei.attackedBy[Them][ROOK] & ~pos.pieces(Them);
@@ -441,12 +436,12 @@ namespace {
         {
             // ...and then remove squares not supported by another enemy piece
             b &= (  ei.attackedBy[Them][PAWN]   | ei.attackedBy[Them][KNIGHT]
-                  | ei.attackedBy[Them][BISHOP]); // | ei.attackedBy[Them][QUEEN]);
+                  | ei.attackedBy[Them][BISHOP]);
 
             if (b)
                 attackUnits += RookContactCheck * popcount<Max15>(b);
         }
-//}
+
         // Analyse the enemy's safe distance checks for sliders and knights
         safe = ~(ei.attackedBy[Us][ALL_PIECES] | pos.pieces(Them));
 

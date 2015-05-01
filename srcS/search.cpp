@@ -64,14 +64,14 @@ namespace {
   enum NodeType { Root, PV, NonPV };
 
   // Razoring and futility margin based on depth
-  inline Value razor_margin(Depth d) { return Value(512 + 32 * d); }
-  inline Value futility_margin(Depth d) { return Value(200 * d); }
+  Value razor_margin(Depth d) { return Value(512 + 32 * d); }
+  Value futility_margin(Depth d) { return Value(200 * d); }
 
   // Futility and reductions lookup tables, initialized at startup
   int FutilityMoveCounts[2][16];  // [improving][depth]
   Depth Reductions[2][2][64][64]; // [pv][improving][depth][moveNumber]
 
-  template <bool PvNode> inline Depth reduction(bool i, Depth d, int mn) {
+  template <bool PvNode> Depth reduction(bool i, Depth d, int mn) {
     return Reductions[PvNode][i][std::min(d, 63 * ONE_PLY)][std::min(mn, 63)];
   }
 
@@ -129,6 +129,10 @@ namespace {
   size_t PVIdx;
   EasyMoveManager EasyMove;
   double BestMoveChanges;
+  int bmcPars [2] = {100, 50};
+  TUNE(bmcPars);
+  double bmcIncrement = bmcPars[0]/100.0;
+  double bmcDecay     = bmcPars[1]/100.0;
   Value DrawValue[COLOR_NB];
   HistoryStats History;
   CounterMovesHistoryStats CounterMovesHistory;
@@ -332,7 +336,7 @@ namespace {
     std::memset(ss-2, 0, 5 * sizeof(Stack));
 
     depth = DEPTH_ZERO;
-
+    BestMoveChanges = 0;
     bestValue = delta = alpha = -VALUE_INFINITE;
     beta = VALUE_INFINITE;
 
@@ -356,7 +360,7 @@ namespace {
     while (++depth < DEPTH_MAX && !Signals.stop && (!Limits.depth || depth <= Limits.depth))
     {
         // Age out PV variability metric
-        BestMoveChanges = (depth <= 3 * ONE_PLY) ? 0 : BestMoveChanges * 0.5;
+        BestMoveChanges *= bmcDecay;
 
         // Save the last iteration's scores before first PV line is searched and
         // all the move scores except the (new) PV are set to -VALUE_INFINITE.
@@ -462,16 +466,12 @@ namespace {
 
                 // Stop the search if only one legal move is available or all
                 // of the available time has been used or we matched an easyMove
-
-                // from the previous search and just did a fast verification or the
-                // best move is 100% stable and we used over 2/3 of available time.
+                // from the previous search and just did a fast verification.
                 if (   RootMoves.size() == 1
                     || Time.elapsed() > Time.available()
                     || (   RootMoves[0].pv[0] == easyMove
                         && BestMoveChanges < 0.03
-                        && Time.elapsed() > Time.available() / 10)
-                    || (   BestMoveChanges == 0
-                        && Time.elapsed() > 2 * Time.available() / 3))
+                        && Time.elapsed() > Time.available() / 10))
                 {
                     // If we are allowed to ponder do not stop the search now but
                     // keep pondering until the GUI sends "ponderhit" or "stop".
@@ -491,7 +491,7 @@ namespace {
 
     // Clear any candidate easy move that wasn't stable for the last search
     // iterations; the second condition prevents consecutive fast moves.
-    if (EasyMove.stableCnt < 6 || Time.elapsed() < 7 * Time.available() / 10)
+    if (EasyMove.stableCnt < 6 || Time.elapsed() < Time.available())
         EasyMove.clear();
 
     // If skill level is enabled, swap best PV line with the sub-optimal one
@@ -695,7 +695,7 @@ namespace {
     }
 
     // Step 7. Futility pruning: child node (skipped when in check)
-    if (   !PvNode
+    if (   !RootNode
         &&  depth < 7 * ONE_PLY
         &&  eval - futility_margin(depth) >= beta
         &&  eval < VALUE_KNOWN_WIN  // Do not return unproven wins
@@ -888,10 +888,14 @@ moves_loop: // When in check and at SpNode search starts from here
       newDepth = depth - ONE_PLY + extension;
 
       // Step 13. Pruning at shallow depth
-      if (   !PvNode
+      if (   !RootNode
           && !captureOrPromotion
           && !inCheck
           && !dangerous
+          && (   !PvNode || bestMove != MOVE_NONE
+              || (   move != countermove
+                  && move != ss->killers[0]
+                  && move != ss->killers[1]))
           &&  bestValue > VALUE_MATED_IN_MAX_PLY)
       {
           // Move count based pruning
@@ -953,7 +957,7 @@ moves_loop: // When in check and at SpNode search starts from here
 
       // Step 15. Reduced depth search (LMR). If the move fails high it will be
       // re-searched at full depth.
-       if (((depth >= 3 * ONE_PLY &&  moveCount > 1) || (depth == 2 * ONE_PLY && moveCount > 2 && CounterMovesHistory[pos.piece_on(prevMoveSq)][prevMoveSq][pos.piece_on(to_sq(move))][to_sq(move)]< VALUE_ZERO))
+      if (    depth >= 3 * ONE_PLY
           &&  moveCount > 1
           && !captureOrPromotion
           &&  move != ss->killers[0]
@@ -962,10 +966,8 @@ moves_loop: // When in check and at SpNode search starts from here
           ss->reduction = reduction<PvNode>(improving, depth, moveCount);
 
           if (   (!PvNode && cutNode)
-
-              || (  History[pos.piece_on(to_sq(move))][to_sq(move)] < VALUE_ZERO
-              &&  CounterMovesHistory[pos.piece_on(prevMoveSq)][prevMoveSq]
-                                       [pos.piece_on(to_sq(move))][to_sq(move)] <= VALUE_ZERO))
+              || (   History[pos.piece_on(to_sq(move))][to_sq(move)] < VALUE_ZERO
+                  && CounterMovesHistory[pos.piece_on(prevMoveSq)][prevMoveSq][pos.piece_on(to_sq(move))][to_sq(move)] <= VALUE_ZERO))
               ss->reduction += ONE_PLY;
 
           if (move == countermove)
@@ -1060,8 +1062,8 @@ moves_loop: // When in check and at SpNode search starts from here
               // We record how often the best move has been changed in each
               // iteration. This information is used for time management: When
               // the best move changes frequently, we allocate some more time.
-              if (moveCount > 1)
-                  ++BestMoveChanges;
+              for(int c = moveCount >> 1; c; c >>= 1){BestMoveChanges += bmcIncrement;}
+
           }
           else
               // All other moves but the PV are set to the lowest value: this is
@@ -1070,7 +1072,6 @@ moves_loop: // When in check and at SpNode search starts from here
               rm.score = -VALUE_INFINITE;
       }
 
-      bool goodMove = false;
       if (value > bestValue)
       {
           bestValue = SpNode ? splitPoint->bestValue = value : value;
@@ -1083,9 +1084,8 @@ moves_loop: // When in check and at SpNode search starts from here
                   && (move != EasyMove.get(pos.key()) || moveCount > 1))
                   EasyMove.clear();
 
-              goodMove = true;
-
               bestMove = SpNode ? splitPoint->bestMove = move : move;
+
               if (PvNode && !RootNode) // Update pv even in fail-high case
                   update_pv(SpNode ? splitPoint->ss->pv : ss->pv, move, (ss+1)->pv);
 
@@ -1103,7 +1103,7 @@ moves_loop: // When in check and at SpNode search starts from here
           }
       }
 
-      if (!SpNode && !captureOrPromotion && !goodMove && quietCount < 64)
+      if (!SpNode && !captureOrPromotion && move != bestMove && quietCount < 64)
           quietsSearched[quietCount++] = move;
 
       // Step 19. Check for splitting the search
@@ -1149,7 +1149,7 @@ moves_loop: // When in check and at SpNode search starts from here
                    :     inCheck ? mated_in(ss->ply) : DrawValue[pos.side_to_move()];
 
     // Quiet best move: update killers, history and countermoves
-    else if (bestMove != MOVE_NONE && !pos.capture_or_promotion(bestMove))
+    else if (bestMove && !pos.capture_or_promotion(bestMove))
         update_stats(pos, ss, bestMove, depth, quietsSearched, quietCount);
 
     tte->save(posKey, value_to_tt(bestValue, ss->ply),
@@ -1407,9 +1407,12 @@ moves_loop: // When in check and at SpNode search starts from here
     *pv = MOVE_NONE;
   }
 
-  // update_stats() updates killers, history, countermove history and countermoves stats for a quiet best move.
 
-  void update_stats(const Position& pos, Stack* ss, Move move, Depth depth, Move* quiets, int quietsCnt) {
+  // update_stats() updates killers, history, countermove history and
+  // countermoves stats for a quiet best move.
+
+  void update_stats(const Position& pos, Stack* ss, Move move,
+                    Depth depth, Move* quiets, int quietsCnt) {
 
     if (ss->killers[0] != move)
     {

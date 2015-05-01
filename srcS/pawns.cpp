@@ -29,13 +29,10 @@ namespace {
   #define V Value
   #define S(mg, eg) make_score(mg, eg)
 
-  // Doubled pawn penalty by opposed flag and file
-  const Score Doubled[2][FILE_NB] = {
-  { S(23, 75), S(18, 35), S(60, 66), S(33, 80),
-    S(33, 80), S(60, 66), S(18, 35), S(23, 75) },
-  { S(33, 76), S(10, 20), S(34, 25), S(16, 71),
-
-    S(16, 71), S(34, 25), S(10, 20), S(33, 76) } };
+  // Doubled pawn penalty by file
+  const Score Doubled[FILE_NB] = {
+    S(13, 43), S(20, 48), S(23, 48), S(23, 48),
+    S(23, 48), S(23, 48), S(20, 48), S(13, 43) };
 
   // Isolated pawn penalty by opposed flag and file
   const Score Isolated[2][FILE_NB] = {
@@ -54,12 +51,10 @@ namespace {
   // Connected pawn bonus by opposed, phalanx, twice supported and rank
   Score Connected[2][2][2][RANK_NB];
 
-  // Levers bonus by unsupported flag and rank
-  const Score Lever[2][RANK_NB] = {
-  { S( 0, 0), S( 0, 0), S(0, 0), S(10,30),
-    S(37,57), S(78,98), S(0, 0), S( 0, 0) },
-  { S( 0, 0), S( 0, 0), S(0, 0), S( 6, 26),
-    S(27,47), S(50,70), S(0, 0), S( 0, 0) } };
+  // Levers bonus by rank
+  const Score Lever[RANK_NB] = {
+    S( 0, 0), S( 0, 0), S(0, 0), S(0, 0),
+    S(20,20), S(40,40), S(0, 0), S(0, 0) };
 
   // Unsupported pawn penalty
   const Score UnsupportedPawnPenalty = S(20, 10);
@@ -78,9 +73,6 @@ namespace {
   { V(117), V( 1), V(27), V(71), V(94), V(104), V(118) },
   { V(104), V( 4), V(51), V(76), V(82), V(102), V( 97) },
   { V( 80), V(12), V(43), V(65), V(88), V( 91), V(115) } };
-
-  // Value of a doubled pawn in front of the king by [distance from edge]
-  const Value ExtraPawnStrength[] = { V(0), V(7), V(12), V(10) };
 
   // Danger of enemy pawns moving toward our king by [type][distance from edge][rank]
   const Value StormDanger[][4][RANK_NB] = {
@@ -197,10 +189,10 @@ namespace {
             score += Connected[opposed][!!phalanx][more_than_one(supported)][relative_rank(Us, s)];
 
         if (doubled)
-            score -= Doubled[opposed][f] / distance<Rank>(s, frontmost_sq(Us, doubled));
+            score -= Doubled[f] / distance<Rank>(s, frontmost_sq(Us, doubled));
 
         if (lever)
-            score += Lever[!supported][relative_rank(Us, s)];
+            score += Lever[relative_rank(Us, s)];
     }
 
     b = e->semiopenFiles[Us] ^ 0xFF;
@@ -263,9 +255,9 @@ template<Color Us>
 Value Entry::shelter_storm(const Position& pos, Square ksq) {
 
   const Color Them = (Us == WHITE ? BLACK : WHITE);
-  const Bitboard ShelterRanks = (Us == WHITE ? Rank2BB | Rank3BB | Rank4BB : Rank7BB | Rank6BB | Rank5BB);
 
   enum { NoFriendlyPawn, Unblocked, BlockedByPawn, BlockedByKing };
+
   Bitboard b = pos.pieces(PAWN) & (in_front_bb(Us, rank_of(ksq)) | rank_bb(ksq));
   Bitboard ourPawns = b & pos.pieces(Us);
   Bitboard theirPawns = b & pos.pieces(Them);
@@ -276,12 +268,11 @@ Value Entry::shelter_storm(const Position& pos, Square ksq) {
   {
       b = ourPawns & file_bb(f);
       Rank rkUs = b ? relative_rank(Us, backmost_sq(Us, b)) : RANK_1;
-      int extraPawnStrength = more_than_one(b & ShelterRanks) ? ExtraPawnStrength[std::min(f, FILE_H - f)] : 0;
 
       b  = theirPawns & file_bb(f);
       Rank rkThem = b ? relative_rank(Us, frontmost_sq(Them, b)) : RANK_1;
 
-      safety -=  (ShelterWeakness[std::min(f, FILE_H - f)][rkUs] - extraPawnStrength)
+      safety -=  ShelterWeakness[std::min(f, FILE_H - f)][rkUs]
                + StormDanger
                  [f == file_of(ksq) && rkThem == relative_rank(Us, ksq) + 1 ? BlockedByKing  :
                   rkUs   == RANK_1                                          ? NoFriendlyPawn :
