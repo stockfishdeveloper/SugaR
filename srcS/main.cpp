@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
     SETUP_PRIVILEGES();
   #endif
   UCI::init(Options);
-  TT.resize(Options["Hash"]);
+  PSQT::init();
   Tune::init();
   Bitboards::init();
   Position::init();
@@ -46,6 +46,7 @@ int main(int argc, char* argv[]) {
   Eval::init();
   Pawns::init();
   Threads.init();
+  TT.resize(Options["Hash"]);
   Tablebases::init(Options["SyzygyPath"]);
 
 
