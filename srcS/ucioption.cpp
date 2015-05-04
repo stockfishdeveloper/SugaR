@@ -105,18 +105,18 @@ void init(OptionsMap& o) {
   o["Syzygy50MoveRule"]      << Option(true);
   o["SyzygyProbeLimit"]      << Option(6, 0, 6);
   // SPSA
-  o["PawnValueMg"]           << Option(192, 0, 500, on_eval);
-  o["PawnValueEg"]           << Option(262, 0, 500, on_eval);
+  o["PawnValueMg"]           << Option(194, 0, 500, on_eval);
+  o["PawnValueEg"]           << Option(261, 0, 500, on_eval);
   o["KnightValueMg"]         << Option(820, 0, 2000, on_eval);
-  o["KnightValueEg"]         << Option(852, 0, 2000, on_eval);
+  o["KnightValueEg"]         << Option(850, 0, 2000, on_eval);
   o["BishopValueMg"]         << Option(837, 0, 2000, on_eval);
-  o["BishopValueEg"]         << Option(864, 0, 2000, on_eval);
+  o["BishopValueEg"]         << Option(862, 0, 2000, on_eval);
   o["RookValueMg"]           << Option(1266, 0, 3000, on_eval);
   o["RookValueEg"]           << Option(1291, 0, 3000, on_eval);
-  o["QueenValueMg"]          << Option(2514, 0, 5000, on_eval);
-  o["QueenValueEg"]          << Option(2547, 0, 5000, on_eval);
-  o["MidgameLimit"]          << Option(15606, 8000, 25000, on_eval);
-  o["EndgameLimit"]          << Option(3991, 0, 10000, on_eval);
+  o["QueenValueMg"]          << Option(2517, 0, 5000, on_eval);
+  o["QueenValueEg"]          << Option(2543, 0, 5000, on_eval);
+  o["MidgameLimit"]          << Option(15601, 8000, 25000, on_eval);
+  o["EndgameLimit"]          << Option(3993, 0, 10000, on_eval);
 
   on_eval(o["EndgameLimit"]);
 }
